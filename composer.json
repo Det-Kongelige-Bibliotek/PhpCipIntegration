@@ -1,8 +1,8 @@
 {
-    "name": "Rdl/CumulusAPI",
+    "name": "rdl/cumulus-api",
     "description": "PHP integration for the Cumulus CIP REST API.",
-    "keywords": ["template", "composer", "package"],
-    "license": "Apache 2.0",
+    "keywords": ["cumulus", "cip", "rdl"],
+    "license": "Apache-2.0",
     "authors": [
         {
             "name": "Jonas Lindberg Frellesen",

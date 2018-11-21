@@ -7,6 +7,8 @@ namespace Rdl\CumulusAPI;
  * Time: 18:50
  */
 
+use AssertionError;
+
 /**
  * Class CumulusRetriever
  * Handles the search and retrieval of images and metadata from Cumulus.
@@ -20,15 +22,15 @@ class CumulusRetriever {
     /** @var The name of the view for the Cumulus CIP.*/
     private $cipView;
 
-    /** @var string The base path to the search. */
-    private $queryMetadataSearchPath = "metadata/search/";
-    /** @var string The base path to retrieving the metadata fields.*/
-    private $metadataFields = "metadata/getfieldvalues/";
+    /** The base path to the search. */
+    const PATH_METADATA_SEARCH = "metadata/search/";
+    /** The base path to retrieving the metadata fields. */
+    const PATH_METADATA_FIELDS = "metadata/getfieldvalues/";
 
-    /** @var string The base path for the thumbnails. */
-    private $imageThumbnailPath = "preview/thumbnail";
-    /** @var string The base path for the images. */
-    private $imagePath = "preview/image";
+    /** The base path for the thumbnails. */
+    const PATH_THUMBNAIL = "preview/thumbnail";
+    /** The base path for the images. */
+    const PATH_IMAGE = "preview/image";
 
     /**
      * CumulusRetriever constructor.
@@ -45,20 +47,21 @@ class CumulusRetriever {
      * Ensures, that the catalogs respond to the right ID intervals.
      */
     public function setupValidation() {
-        $this->initCatalog('webbilleder',0,  4294967296-1);
-        $this->initCatalog('samlingsbilleder', 4294967296,  8589934592-1);
-        $this->initCatalog('billedarkivet', 8589934592,  12884901888-1);
-        $this->initCatalog('online master arkiv', 12884901888,  17179869184-1);
+        $this->validateCatalog('webbilleder',0,  4294967296-1);
+        $this->validateCatalog('samlingsbilleder', 4294967296,  8589934592-1);
+        $this->validateCatalog('billedarkivet', 8589934592,  12884901888-1);
+        $this->validateCatalog('online master arkiv', 12884901888,  17179869184-1);
     }
 
     /**
      * Validates that the given catalog has right IDs.
-     * It will throw an exception, if
+     * It will throw an exception, if it finds no records, or if the first found ID is either
+     * smaller than the lowerId bound, or larger than the upperId bound.
      * @param $catalogName The name of the catalog to validate.
      * @param $lowerId The lower bound of the IDs of the given catalog.
      * @param $upperId The upper bound of the IDs of the given catalog.
      */
-    protected function initCatalog($catalogName, $lowerId, $upperId) {
+    protected function validateCatalog($catalogName, $lowerId, $upperId) {
         $options = ['field' => 'Catalog Name',
             'maxreturned' => 1,
             'querystring' => "Catalog Name\tis\t" . $catalogName];
@@ -70,6 +73,9 @@ class CumulusRetriever {
             throw new AssertionError("No IDs can be found for the catalog " . $catalogName);
         }
 
+        if($id == null) {
+            throw new AssertionError("No results found for catalog " . $catalogName);
+        }
         if($id < $lowerId) {
            throw new AssertionError("The id " . $id . " for catalog " . $catalogName .
                " must be at least " . $lowerId);
@@ -86,7 +92,7 @@ class CumulusRetriever {
      * @param string $sortBy The field to sort the results by. Default 'Asset Creation Date'.
      * @param string $maxReturned The maximum of results returned. Default 10.
      * @param string $startIndex The start index for paging through a large result set. Default 0.
-     * @return mixed The results.
+     * @return mixed The results in JSON format.
      */
     public function quicksearch($searchString, $maxReturned = '10', $startIndex = '0', $sortBy = 'Asset Creation Date') {
         $options = ['sortby' => $sortBy,
@@ -96,9 +102,7 @@ class CumulusRetriever {
             'field' => 'Catalog Name'];
         $json = $this->search($options);
 
-        // Add the 
-
-        return $json;
+        return $this->addImageUrlsToSearchResults($json);
     }
 
     /**
@@ -108,7 +112,7 @@ class CumulusRetriever {
      */
     public function getMetadata($id) {
         $ch = curl_init();
-        $options = array(CURLOPT_URL => $this->baseUrl . $this->metadataFields . $this->cipView . "/fields/" . $id,
+        $options = array(CURLOPT_URL => $this->getMetadataUrl($id),
             CURLOPT_POST => false,
             CURLOPT_RETURNTRANSFER => true
         );
@@ -119,18 +123,31 @@ class CumulusRetriever {
         $headerInfo = curl_getinfo($ch);
         print_r(array($headerInfo));
 
-        if($headerInfo['http_code'] == 200) {
-            print("Success\n");
-        } else {
-            print("Failure:" . curl_errno($ch) . " -> " . curl_error($ch) . "\n");
+        if($headerInfo['http_code'] != 200) {
             return null;
         }
-        print("Url: " . curl_getinfo($ch, CURLINFO_EFFECTIVE_URL) . "\n");
         curl_close($ch);
 
-        print("Results: " . $results . "\n");
-
         return json_decode($results, true);
+    }
+
+    /**
+     *
+     * @param $json The JSON
+     * @return array|null The new array with the URLs for the images, or null if the $json was badly formatted.
+     */
+    protected function addImageUrlsToSearchResults($json) {
+        if(count($json) < 0 || array_key_exists('items', $json)) {
+            return null;
+        }
+        $res = array();
+        for($i = 0; $i < count($json['items']); $i++) {
+            $res[$i] = $json['items'][$i];
+            $res[$i]['thumbnail'] = $this->getThumbnailUrl($res[$i]['id']);
+            $res[$i]['image'] = $this->getImageUrl($res[$i]['id']);
+        }
+
+        return $res;
     }
 
     /**
@@ -138,7 +155,7 @@ class CumulusRetriever {
      * @return string The URL for the thumbnail image.
      */
     protected function getThumbnailUrl($id) {
-        return $this->baseUrl . $this->imageThumbnailPath . $this->cipView . "/" . $id;
+        return $this->baseUrl . CumulusRetriever::PATH_THUMBNAIL . $this->cipView . "/" . $id;
     }
 
     /**
@@ -146,7 +163,7 @@ class CumulusRetriever {
      * @return string The URL for the image.
      */
     protected function getImageUrl($id) {
-        return $this->baseUrl . $this->imagePath . $this->cipView . "/" . $id;
+        return $this->baseUrl . CumulusRetriever::PATH_IMAGE . $this->cipView . "/" . $id;
     }
 
     /**
@@ -155,7 +172,7 @@ class CumulusRetriever {
      */
     protected function getMetadataUrl($id) {
         //http://cumulus-core-test-01/CIP/metadata/getfieldvalues/samlingsbilleder/fields/315469
-        return $this->baseUrl . $this->metadataFields . $this->cipView . "/fields/" . $id;
+        return $this->baseUrl . CumulusRetriever::PATH_METADATA_FIELDS . $this->cipView . "/fields/" . $id;
     }
 
     /**
@@ -165,7 +182,7 @@ class CumulusRetriever {
      * @return mixed
      */
     protected function search($searchOptions) {
-        $searchUrl = $this->baseUrl . $this->queryMetadataSearchPath . $this->cipView;
+        $searchUrl = $this->baseUrl . CumulusRetriever::PATH_METADATA_SEARCH . $this->cipView;
 
         $ch = curl_init();
         $options = array(CURLOPT_URL => $searchUrl,
@@ -181,15 +198,10 @@ class CumulusRetriever {
         $headerInfo = curl_getinfo($ch);
         // print_r(array($headerInfo));
 
-        if($headerInfo['http_code'] == 200) {
-            print("Success\n");
-        } else {
-            print("Failure:" . curl_errno($ch) . curl_error($ch) . "\n");
+        if($headerInfo['http_code'] != 200) {
+            return null;
         }
-        print("Url: " . curl_getinfo($ch, CURLINFO_EFFECTIVE_URL) . "\n");
         curl_close($ch);
-
-        print("Results: " . $results . "\n");
 
         return json_decode($results, true);
     }
