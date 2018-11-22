@@ -28,9 +28,9 @@ class CumulusRetriever {
     const PATH_METADATA_FIELDS = "metadata/getfieldvalues/";
 
     /** The base path for the thumbnails. */
-    const PATH_THUMBNAIL = "preview/thumbnail";
+    const PATH_THUMBNAIL = "preview/thumbnail/";
     /** The base path for the images. */
-    const PATH_IMAGE = "preview/image";
+    const PATH_IMAGE = "preview/image/";
 
     /**
      * CumulusRetriever constructor.
@@ -137,7 +137,7 @@ class CumulusRetriever {
      * @return array|null The new array with the URLs for the images, or null if the $json was badly formatted.
      */
     protected function addImageUrlsToSearchResults($json) {
-        if(count($json) < 0 || array_key_exists('items', $json)) {
+        if(count($json) < 0 || !array_key_exists('items', $json)) {
             return null;
         }
         $res = array();
