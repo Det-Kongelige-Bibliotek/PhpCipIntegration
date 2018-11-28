@@ -132,8 +132,27 @@ class CumulusRetriever {
     }
 
     /**
-     *
-     * @param $json The JSON
+     * Method for checking, that a record with a given name exists within a given catalog.
+     * @param $filename The name of the record.
+     * @param $catalogName The name of the catalog.
+     * @return bool Whether or not the record exists within the catalog.
+     */
+    public function checkRecord($filename, $catalogName) {
+        $options = ['field' => 'Catalog Name',
+            'querystring' => "Record Name\tis\t"  . $filename];
+        $response = $this->search($options);
+
+        foreach($response['items'] as $element) {
+            if($element['Catalog Name'] == $catalogName) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    /**
+     * Adds the image URLs for the full image and the thumbnail to the JSON output of search result.
+     * @param $json The JSON The JSON from a search.
      * @return array|null The new array with the URLs for the images, or null if the $json was badly formatted.
      */
     protected function addImageUrlsToSearchResults($json) {
@@ -177,9 +196,10 @@ class CumulusRetriever {
 
     /**
      * Perform the actual search.
-     * This should not be used
-     * @param $searchOptions
-     * @return mixed
+     * This should not be used directly.
+     * @param $searchOptions The options for the search. Should be an array of search options, like searchquery,
+     * limit, sorting, retrieved fields, etc.
+     * @return mixed The JSON results of the search. Or null, if the it fails to retrieve anything.
      */
     protected function search($searchOptions) {
         $searchUrl = $this->baseUrl . CumulusRetriever::PATH_METADATA_SEARCH . $this->cipView;
@@ -196,9 +216,10 @@ class CumulusRetriever {
 
         $results = curl_exec($ch);
         $headerInfo = curl_getinfo($ch);
-        // print_r(array($headerInfo));
+
 
         if($headerInfo['http_code'] != 200) {
+            print_r(array($headerInfo));
             return null;
         }
         curl_close($ch);

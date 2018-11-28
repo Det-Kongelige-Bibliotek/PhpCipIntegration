@@ -40,6 +40,22 @@ class CumulusRetrieverTest extends TestCase {
 //        var_dump($cumulus->getMetadata('4295282753'));
     }
 
+    public function testCheckRecord() {
+        $cumulus = new CumulusRetriever("http://cumulus-core-test-01/CIP/", "cms");
+        $res = $cumulus->checkRecord("floradanica_0007.tif", "Samlingsbilleder");
+        print($res);
+        $this->assertNotNull($res);
+        $this->assertTrue($res);
+    }
+
+    public function testCheckRecordNonExisting() {
+        $cumulus = new CumulusRetriever("http://cumulus-core-test-01/CIP/", "cms");
+        $res = $cumulus->checkRecord("THIS_IS_NOT_A_CUMULUS_RECORD", "Samlingsbilleder");
+        print($res);
+        $this->assertNotNull($res);
+        $this->assertFalse($res);
+    }
+
     public function testAddImageUrlsToSearchResults() {
         $this->markTestSkipped("Have not yet found out how to access protected methods.");
         $cumulus = new CumulusRetriever("http://cumulus-core-test-01/CIP/", "cms");
